@@ -1,0 +1,193 @@
+-- // FULL STANDALONE SILENT AIM by Grok (2026 Edition)
+-- // Customize Settings here (your "own" part!)
+local Settings = {
+    Enabled = true,                -- Start enabled
+    TeamCheck = true,              -- Ignore teammates
+    VisibleCheck = false,          -- Only visible (wallbang off)
+    TargetPart = 1,                -- 1=Head, 2=HRP, 3=Random
+    FOVRadius = 150,               -- Pixels
+    HitChance = 100,               -- % (100=always)
+    Prediction = true,             -- Lead moving targets
+    PredAmount = 0.165,            -- Ping factor (tweak 0.13-0.2)
+    ShowFOV = true,                -- Cyan circle
+    ShowTarget = true,             -- Red box on aim target
+    FOVColor = Color3.fromRGB(0, 162, 255),  -- Cyan
+    TargetColor = Color3.fromRGB(255, 0, 0)  -- Red
+}
+
+-- // Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
+local Camera = workspace.CurrentCamera
+
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+-- // Drawing Objects
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.NumSides = 128
+FOVCircle.Radius = Settings.FOVRadius
+FOVCircle.Thickness = 2
+FOVCircle.Filled = false
+FOVCircle.Transparency = 0.8
+FOVCircle.Color = Settings.FOVColor
+FOVCircle.Visible = Settings.ShowFOV
+
+local TargetBox = Drawing.new("Square")
+TargetBox.Size = Vector2.new(8, 8)
+TargetBox.Filled = true
+TargetBox.Thickness = 1
+TargetBox.Color = Settings.TargetColor
+TargetBox.Visible = false
+
+-- // Variables
+local TargetCache = nil
+local TargetPartCycle = {"Head", "HumanoidRootPart", "Random"}
+local CurrentPartIndex = Settings.TargetPart
+
+-- // Math helpers
+local function inFOV(Position, MousePos, Radius)
+    local ScreenPos, OnScreen = Camera:WorldToViewportPoint(Position)
+    if not OnScreen then return false end
+    return (Vector2.new(ScreenPos.X, ScreenPos.Y) - MousePos).Magnitude <= Radius
+end
+
+local function randomChance(Percent)
+    return math.random() * 100 <= Percent
+end
+
+local function getPredictedPos(Target)
+    if not Target or not Settings.Prediction then return Target.Position end
+    local Velocity = Target.AssemblyLinearVelocity or Target.Velocity or Vector3.new()
+    return Target.Position + (Velocity * Settings.PredAmount)
+end
+
+-- // Visible check
+local function isVisible(Target)
+    if not Settings.VisibleCheck then return true end
+    local LocalChar = LocalPlayer.Character
+    if not LocalChar then return false end
+    local Parts = Camera:GetPartsObscuringTarget({Target.Position}, {LocalChar, Target.Parent})
+    return #Parts == 0
+end
+
+-- // Main target finder (runs every frame)
+local function getClosestTarget()
+    local Closest, ClosestDist = nil, Settings.FOVRadius + 1
+    local MousePos = UserInputService:GetMouseLocation()
+    for _, Player in pairs(Players:GetPlayers()) do
+        if Player == LocalPlayer then continue end
+        if Settings.TeamCheck and Player.Team == LocalPlayer.Team then continue end
+        
+        local Char = Player.Character
+        if not Char then continue end
+        
+        local Humanoid = Char:FindFirstChildOfClass("Humanoid")
+        if not Humanoid or Humanoid.Health <= 0 then continue end
+        
+        local Root = Char:FindFirstChild("HumanoidRootPart")
+        if not Root then continue end
+        
+        -- Use Root for FOV check (more reliable)
+        if not inFOV(Root.Position, MousePos, Settings.FOVRadius) then continue end
+        if not isVisible(Root) then continue end
+        
+        -- Select part
+        local TargetPart
+        if CurrentPartIndex == 1 then
+            TargetPart = Char:FindFirstChild("Head")
+        elseif CurrentPartIndex == 2 then
+            TargetPart = Root
+        else -- Random
+            TargetPart = Char:FindFirstChild("Head") or Root
+        end
+        if not TargetPart then continue end
+        
+        local Dist = (Vector2.new(Camera:WorldToViewportPoint(Root.Position).X, Camera:WorldToViewportPoint(Root.Position).Y) - MousePos).Magnitude
+        if Dist < ClosestDist then
+            Closest = TargetPart
+            ClosestDist = Dist
+        end
+    end
+    return Closest
+end
+
+-- // Update visuals loop
+RunService.RenderStepped:Connect(function()
+    local MousePos = UserInputService:GetMouseLocation()
+    FOVCircle.Position = MousePos
+    
+    TargetCache = getClosestTarget()
+    if Settings.ShowTarget and TargetCache then
+        local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetCache.Position)
+        TargetBox.Position = Vector2.new(ScreenPos.X - 4, ScreenPos.Y - 4)
+        TargetBox.Visible = OnScreen
+    else
+        TargetBox.Visible = false
+    end
+end)
+
+-- // Core Silent Aim Hooks
+-- 1. Workspace Raycast/FindPartOnRay hook (90% games)
+local GameMT = getrawmetatable(game)
+local OldNamecall = GameMT.__namecall
+setreadonly(GameMT, false)
+
+GameMT.__namecall = newcclosure(function(Self, ...)
+    local Args = {...}
+    local Method = getnamecallmethod()
+    
+    if Settings.Enabled and Self == workspace and TargetCache and randomChance(Settings.HitChance) and
+       (Method == "Raycast" or Method:find("FindPartOnRay")) then
+        
+        local Origin
+        if Method == "Raycast" then
+            Origin = Args[1]  -- Vector3 origin
+            Args[2] = (getPredictedPos(TargetCache) - Origin).Unit * 1000  -- direction
+        else  -- FindPartOnRay* (Ray arg)
+            Origin = Args[2].Origin
+            Args[2] = Ray.new(Origin, (getPredictedPos(TargetCache) - Origin).Unit * 1000)
+        end
+    end
+    
+    return OldNamecall(Self, ...)
+end)
+setreadonly(GameMT, true)
+
+-- 2. Mouse.Hit/Target hook (legacy games)
+local MouseMT = getrawmetatable(Mouse)
+local OldIndex = MouseMT.__index
+setreadonly(MouseMT, false)
+
+MouseMT.__index = newcclosure(function(Self, Key)
+    if Settings.Enabled and TargetCache and (Key == "Hit" or Key == "Target") and randomChance(Settings.HitChance) then
+        local Predicted = getPredictedPos(TargetCache)
+        return Key == "Hit" and CFrame.new(Predicted, Predicted + Camera.CFrame.LookVector * 10) or Predicted
+    end
+    return OldIndex(Self, Key)
+end)
+setreadonly(MouseMT, true)
+
+-- // Input Controls (your hotkeys)
+UserInputService.InputBegan:Connect(function(Input, Processed)
+    if Processed then return end
+    
+    if Input.KeyCode == Enum.KeyCode.RightAlt then
+        Settings.Enabled = not Settings.Enabled
+        FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
+        print("Silent Aim:", Settings.Enabled and "ON" or "OFF")
+    elseif Input.KeyCode == Enum.KeyCode.LeftAlt then
+        CurrentPartIndex = (CurrentPartIndex % 3) + 1
+        print("Target Part:", TargetPartCycle[CurrentPartIndex])
+    elseif Input.KeyCode == Enum.KeyCode.LeftShift then
+        Settings.ShowFOV = not Settings.ShowFOV
+        FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
+    elseif Input.KeyCode == Enum.KeyCode.LeftControl then
+        Settings.ShowTarget = not Settings.ShowTarget
+        TargetBox.Visible = false  -- Reset
+    end
+end)
+
+print("Full Custom Silent Aim Loaded! RightAlt=Toggle, LeftAlt=Cycle Part, LShift=FOV, LCtrl=TargetBox")
