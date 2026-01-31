@@ -47,7 +47,7 @@ local function u11(u12: number)
 			table.insert(_G.ESP.UserIDs[u12], u8(u14))
 		end
 	end
-	warn("ESP CREATED FOR "..tostring(u12))
+	-- // DEBUG LINE warn("ESP CREATED FOR "..tostring(u12))
 end
 local function u15(u16: number)
 	for _, u17 in ipairs(_G.ESP.UserIDs[u16]) do
@@ -55,7 +55,7 @@ local function u15(u16: number)
 		u17:Destroy()
 	end
 	table.clear(_G.ESP.UserIDs[u16])
-	warn("ESP REMOVED FROM "..tostring(u16))
+	-- // DEBUG LINEwarn("ESP REMOVED FROM "..tostring(u16))
 end
 for _, u18 in ipairs(u1:GetPlayers()) do
 	if u18.UserId == u3.UserId then
@@ -70,7 +70,18 @@ u1.PlayerAdded:Connect(function(u19)
 	if u19 == nil then
 		return;
 	end
-	u11(u19.UserId)
+	u19.CharacterAdded:Connect(function(u22)
+		if u19 == nil then
+			return;
+		end
+		if u22:FindFirstChild("Humanoid") == nil then
+			return;
+		end
+		u11(u19.UserId)
+		u22.Humanoid.Died:Connect(function()
+			u15(u19.UserId)
+		end)
+	end)
 end)
 u1.PlayerRemoving:Connect(function(u20)
 	if u20.UserId == u3.UserId then
