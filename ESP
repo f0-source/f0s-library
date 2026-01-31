@@ -1,0 +1,84 @@
+_G.ESP = {
+	UserIDs = {},
+}
+local u1 = game:GetService("Players")
+local u2 = game:GetService("HttpService")
+local u3 = u1.LocalPlayer
+local u4 = Instance.new("Folder")
+u4.Name = string.gsub(u2:GenerateGUID(false), "-", ""):upper()
+u4.Parent = u3.PlayerGui
+local function u5(u6: BasePart): SelectionBox
+	local u7 = Instance.new("SelectionBox")
+	u7.Parent = u4
+	u7.Adornee = u6
+	u7.Color3 = Color3.fromRGB(255, 255, 255)
+	u7.SurfaceColor3 = Color3.fromRGB(255, 255, 255)
+	u7.SurfaceTransparency = 1
+	u7.Transparency = 0
+	u7.LineThickness = 0.1
+	return u7
+end
+local function u8(u9: BasePart): Highlight
+	local u10 = Instance.new("Highlight")
+	u10.Parent = u4
+	u10.Adornee = u9
+	u10.FillColor = Color3.fromRGB(255, 255, 255)
+	u10.FillTransparency = 0
+	u10.OutlineColor = Color3.fromRGB(255, 255, 255)
+	u10.OutlineTransparency = 1
+	u10.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	return u10
+end
+local function u11(u12: number)	
+	_G.ESP.UserIDs[u12] = {}
+    -- // 
+	local u21 = u1:GetPlayerByUserId(u12)
+	if u21 == nil then
+		return;
+	end
+	if u21.Character == nil then
+		return;
+	end
+    -- //
+	for _, u13 in ipairs(u21.Character:GetDescendants()) do
+		if u13:IsA("Motor6D") and u21.Character:FindFirstChild(u13.Part1.Name) then
+			local u14 = u13.Part1
+			table.insert(_G.ESP.UserIDs[u12], u5(u14))	
+			table.insert(_G.ESP.UserIDs[u12], u8(u14))
+		end
+	end
+	warn("ESP CREATED FOR "..tostring(u12))
+end
+local function u15(u16: number)
+	for _, u17 in ipairs(_G.ESP.UserIDs[u16]) do
+		u17.Adornee = nil
+		u17:Destroy()
+	end
+	table.clear(_G.ESP.UserIDs[u16])
+	warn("ESP REMOVED FROM "..tostring(u16))
+end
+for _, u18 in ipairs(u1:GetPlayers()) do
+	if u18.UserId == u3.UserId then
+		continue;
+	end
+	if u18 == nil then
+		continue;
+	end
+	u11(u18.UserId)
+end
+u1.PlayerAdded:Connect(function(u19)
+	if u19 == nil then
+		return;
+	end
+	u11(u19.UserId)
+end)
+u1.PlayerRemoving:Connect(function(u20)
+	if u20.UserId == u3.UserId then
+		return;
+	end
+	if u20 == nil then
+		return;
+	end
+	u15(u20.UserId)
+	_G.ESP.UserIDs[u20.UserId] = nil
+end)
