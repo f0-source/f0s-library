@@ -1,0 +1,117 @@
+local Settings = {
+    Enabled = true,
+    TeamCheck = true,
+    TargetPart = "Head",          -- "Head" or "HumanoidRootPart"
+    FOVRadius = 150,
+    Smoothness = 0.15,            -- 0 = instant, 1 = very slow
+    Prediction = true,
+    PredAmount = 0.165,
+    ShowFOV = true,
+    FOVColor = Color3.fromRGB(0, 162, 255),
+}
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+
+local LocalPlayer = Players.LocalPlayer
+
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.NumSides = 128
+FOVCircle.Radius = Settings.FOVRadius
+FOVCircle.Thickness = 2
+FOVCircle.Filled = false
+FOVCircle.Transparency = 0.8
+FOVCircle.Color = Settings.FOVColor
+FOVCircle.Visible = Settings.ShowFOV
+
+local function inFOV(pos, mousePos, radius)
+    local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
+    if not onScreen then return false end
+    return (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude <= radius
+end
+
+local function getPredictedPos(part)
+    if not part or not Settings.Prediction then return part.Position end
+    local velocity = part.AssemblyLinearVelocity or part.Velocity or Vector3.new()
+    return part.Position + velocity * Settings.PredAmount
+end
+
+local function isVisible(targetPart)
+    local localCharacter = LocalPlayer.Character
+    if not localCharacter then return false end
+
+    -- Ignore local character and target's character to avoid false positives
+    local ignoreList = {localCharacter, targetPart.Parent}
+
+    -- Check parts obscuring the target position from the camera
+    local parts = Camera:GetPartsObscuringTarget({targetPart.Position}, ignoreList)
+    
+    -- If no parts obstructing, target is visible
+    return #parts == 0
+end
+
+local function getClosestTarget()
+    local closestTarget = nil
+    local closestDistance = Settings.FOVRadius + 1
+    local mousePos = UserInputService:GetMouseLocation()
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            if Settings.TeamCheck and player.Team == LocalPlayer.Team then
+                -- Skip teammates
+            else
+                local character = player.Character
+                if character then
+                    local humanoid = character:FindFirstChildOfClass("Humanoid")
+                    if humanoid and humanoid.Health > 0 then
+                        local targetPart = character:FindFirstChild(Settings.TargetPart)
+                        if targetPart and inFOV(targetPart.Position, mousePos, Settings.FOVRadius) then
+                            if isVisible(targetPart) then  -- Visibility check here
+                                local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                                if onScreen then
+                                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                                    if dist < closestDistance then
+                                        closestDistance = dist
+                                        closestTarget = targetPart
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return closestTarget
+end
+
+
+RunService.RenderStepped:Connect(function(deltaTime)
+    FOVCircle.Position = UserInputService:GetMouseLocation()
+    FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
+
+    if Settings.Enabled then
+        local target = getClosestTarget()
+        if target then
+            local predictedPos = getPredictedPos(target)
+            local cameraPos = Camera.CFrame.Position
+            local targetCFrame = CFrame.lookAt(cameraPos, predictedPos)
+
+            -- Smoothly interpolate camera CFrame towards targetCFrame
+            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, Settings.Smoothness)
+        end
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.LeftAlt then
+        Settings.Enabled = not Settings.Enabled
+        print("Smooth Aim:", Settings.Enabled and "Enabled" or "Disabled")
+    end
+end)
+
+print("Improved Smooth Aim script loaded. Press RightAlt to toggle.")
