@@ -14,13 +14,13 @@ local function Remove(character)
 end
 
 for i, v in pairs(game.Players:GetPlayers()) do
-   if v and v ~= game.Players.LocalPlayer and v.Character ~= nil then
+   if v and v.Character ~= nil then
       Add(v.Character)
    end
 end
 
 game.Players.PlayerAdded:Connect(function(player)
-   if player == game.Players.LocalPlayer or player.Team == game.Players.LocalPlayer.Team then
+   if player == game.Players.LocalPlayer then
       return
    end
 
@@ -34,6 +34,12 @@ end)
 
 game["RunService"].Stepped:Connect(function()  
    for i, character in ipairs(expanderTable) do
+
+      local player = game:GetService("Players"):GetPlayerFromCharacter(character)
+      if player == game.Players.LocalPlayer or player.Team == game.Players.LocalPlayer.Team then
+         continue
+      end
+
       local targetPart = character:FindFirstChild(targetHitbox)
       if targetPart then
          targetPart.Size = Vector3.new(size, size, size)
