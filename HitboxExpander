@@ -1,0 +1,44 @@
+local targetHitbox, size =  ...
+
+local expanderTable = {}
+
+local function Add(character)
+   if not table.find(expanderTable, character) then
+      table.insert(expanderTable, character)
+   end
+end
+local function Remove(character)
+   if table.find(expanderTable, character) then
+      table.remove(expanderTable, table.find(expanderTable, character))
+   end
+end
+
+for i, v in pairs(game.Players:GetPlayers()) do
+   if v and v ~= game.Players.LocalPlayer and v.Character ~= nil then
+      Add(v.Character)
+   end
+end
+
+game.Players.PlayerAdded:Connect(function(player)
+   if player == game.Players.LocalPlayer or player.Team == game.Players.LocalPlayer.Team then
+      return
+   end
+
+   player.CharacterAdded:Connect(function(character)
+      Add(character)
+   end)
+   player.CharacterRemoving:Connect(function(character)
+      Remove(character)
+   end)
+end)
+
+game["RunService"].Stepped:Connect(function()  
+   for i, character in ipairs(expanderTable) do
+      local targetPart = character:FindFirstChild(targetHitbox)
+      if targetPart then
+         targetPart.Size = Vector3.new(size, size, size)
+         targetPart.Transparency = 0.5
+         targetPart.CanCollide = false
+      end
+   end
+end)
