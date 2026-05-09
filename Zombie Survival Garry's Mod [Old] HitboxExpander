@@ -1,0 +1,74 @@
+local size =  ...
+
+local expanderTable = {}
+
+local players = game:GetService("Players")
+local workspace = game:GetService("Workspace")
+
+local function Add(character, bot)
+   if not expanderTable[character.Name] then
+      expanderTable[character.Name] = {
+         ["Bot"] = bot,
+         ["Team"] = (players:GetPlayerFromCharacter(character).Team or nil),
+         ["Character"] = character
+      }
+   end
+end
+local function Remove(character)
+   if expanderTable[character.Name] then
+      expanderTable[character.Name] = nil
+   end
+end
+
+for i, v in pairs(players:GetPlayers()) do
+   if v and v ~= players.LocalPlayer  and v.Character ~= nil then
+      Add(v.Character, false)
+   end
+end
+
+players.PlayerAdded:Connect(function(player)
+   if player == players.LocalPlayer then
+      return
+   end
+
+   player.CharacterAdded:Connect(function(character)
+      Add(character, false)
+   end)
+   player.CharacterRemoving:Connect(function(character)
+      Remove(character)
+   end)
+end)
+
+workspace.Bots.ChildAdded:Connect(function(Child)
+   if Child:FindFirstChild("Humanoid") then
+      Add(Child, true)
+   end
+end)
+workspace.Bots.ChildRemoved:Connect(function(Child)
+   if Child:FindFirstChild("Humanoid") then
+      Remove(Child)
+   end
+end)
+
+local targetPart = nil
+
+game:GetService("RunService").Stepped:Connect(function()  
+   for i, tabl in pairs(expanderTable) do
+
+      if not tabl.Bot and tabl.Team.Name == players.LocalPlayer.Team.Name then
+         continue
+      end
+
+      if players.LocalPlayer.Team.Name == "Survivors" then 
+         targetPart = tabl.Character:FindFirstChild("Head")
+      elseif players.LocalPlayer.Team.Name == "Zombies" then 
+         targetPart = tabl.Character:FindFirstChild("HumanoidRootPart")
+      end
+
+      if targetPart then
+         targetPart.Size = Vector3.new(size, size, size)
+         targetPart.Transparency = 0.5
+         targetPart.CanCollide = false
+      end
+   end
+end)
