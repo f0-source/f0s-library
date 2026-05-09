@@ -36,7 +36,7 @@ game["RunService"].Stepped:Connect(function()
    for i, character in ipairs(expanderTable) do
 
       local player = game:GetService("Players"):GetPlayerFromCharacter(character)
-      if player == game.Players.LocalPlayer or player.Team.Name == game.Players.LocalPlayer.Team.Name then
+      if player and player == game.Players.LocalPlayer or player.Team == game.Players.LocalPlayer.Team then
          continue
       end
 
